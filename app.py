@@ -1,51 +1,39 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import base64, cv2, numpy as np, io
+import cv2
+import numpy as np
 from ultralytics import YOLO
 from PIL import Image
-from fastapi import FastAPI
-from pydantic import BaseModel
-from threading import Thread
-import uvicorn
+import base64, io, json
 
-# Initialize YOLO model
+st.set_page_config(page_title="Real-time Face Detection", layout="wide")
+st.title("👁️ Real-time Face Detection using YOLO")
+
+# Load YOLO face model
 model = YOLO("yolov8n-face.pt")
 
-# ---------- FASTAPI BACKEND ----------
-app_fastapi = FastAPI()
+# Endpoint for frame detection (Streamlit's experimental API feature)
+if st.experimental_user.is_active():  # Normal UI rendering
+    with open("frontend.html", "r") as f:
+        components.html(f.read(), height=700)
+else:
+    # Handle API request (for POST /detect)
+    import os
+    from streamlit.web.server.websocket_headers import _get_websocket_headers
 
-class Frame(BaseModel):
-    image: str
-
-@app_fastapi.post("/detect")
-def detect(frame: Frame):
-    img_data = base64.b64decode(frame.image.split(",")[1])
-    img = Image.open(io.BytesIO(img_data))
-    img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-    
-    results = model(img_cv)
-    annotated = results[0].plot()
-    _, buffer = cv2.imencode(".jpg", annotated)
-    annotated_base64 = base64.b64encode(buffer).decode("utf-8")
-    
-    return {"image": "data:image/jpeg;base64," + annotated_base64}
-
-def run_fastapi():
-    uvicorn.run(app_fastapi, host="0.0.0.0", port=7861)
-
-# Run FastAPI in background thread
-Thread(target=run_fastapi, daemon=True).start()
-
-# ---------- STREAMLIT FRONTEND ----------
-st.set_page_config(page_title="Realtime Face Recognition", layout="wide")
-st.title("👁️ Realtime Face Detection via Webcam")
-
-st.markdown(
-    """
-    This app uses your browser's webcam (via JavaScript) and sends frames to a YOLO model 
-    running on the backend for real-time face detection.
-    """
-)
-
-with open("frontend.html", "r") as f:
-    components.html(f.read(), height=700)
+    def handle_request():
+        headers = _get_websocket_headers()
+        if "Content-Type" in headers and headers["Content-Type"] == "application/json":
+            body = st.experimental_get_query_params().get("body", None)
+            if not body:
+                return
+            frame = json.loads(body)
+            img_data = base64.b64decode(frame["image"].split(",")[1])
+            img = Image.open(io.BytesIO(img_data))
+            img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+            results = model(img_cv)
+            annotated = results[0].plot()
+            _, buffer = cv2.imencode(".jpg", annotated)
+            annotated_base64 = base64.b64encode(buffer).decode("utf-8")
+            return {"image": "data:image/jpeg;base64," + annotated_base64}
+    handle_request()
