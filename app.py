@@ -1,55 +1,55 @@
 import streamlit as st
 import cv2
-import tempfile
 import numpy as np
 from ultralytics import YOLO
-from PIL import Image
+import tempfile
+import os
+import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Real-time Face Recognition", layout="wide")
+st.set_page_config(page_title="Face Detection App", layout="centered")
 
-st.title("🎯 Real-time Face Detection App")
-
-# Load YOLO model (face detection)
+# Load YOLO model (using pretrained face detector)
 @st.cache_resource
 def load_model():
-    try:
-        model = YOLO("yolov8n-face.pt")  # Make sure this file exists in your repo
-    except Exception as e:
-        st.error(f"Error loading YOLO model: {e}")
-        st.stop()
-    return model
+    return YOLO("yolov8n-face.pt")
 
 model = load_model()
 
-# Camera input (Streamlit widget)
-st.sidebar.header("📷 Camera Settings")
-use_camera = st.sidebar.toggle("Use Camera", value=True)
+st.title("😎 Real-Time Face Detection (No Pillow Version)")
+st.markdown("This app uses your **laptop camera** or an uploaded image to detect faces.")
 
-if use_camera:
-    st.info("Turn on your camera and allow browser access.")
-    camera_input = st.camera_input("Capture a Frame")
-else:
-    camera_input = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+# Sidebar options
+mode = st.sidebar.radio("Choose Mode", ["Webcam Feed", "Upload Image"])
 
-# Display and detect
-if camera_input is not None:
-    with st.spinner("Processing..."):
-        img = Image.open(camera_input)
-        img_array = np.array(img)
+# Load webcam feed
+if mode == "Webcam Feed":
+    st.subheader("📸 Live Webcam Feed")
+    with open("frontend.html", "r") as f:
+        components.html(f.read(), height=700)
+
+# Image Upload
+elif mode == "Upload Image":
+    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file is not None:
+        # Read image directly with OpenCV (no Pillow)
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
         # Run YOLO face detection
-        results = model.predict(source=img_array, conf=0.5, verbose=False)
-        boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
+        results = model(img)
+        annotated_frame = results[0].plot()
 
-        # Draw boxes on the image
-        for (x1, y1, x2, y2) in boxes:
-            cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        # Convert BGR → RGB for Streamlit
+        st.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), caption="Detected Faces", use_column_width=True)
 
-        # Convert BGR → RGB and display
-        st.image(img_array, caption="Detected Faces", use_column_width=True)
-
-else:
-    st.warning("Please capture or upload an image to start detection.")
-
-st.markdown("---")
-st.caption("Built with ❤️ using Streamlit + YOLOv8")
+        # Optional: Save detections
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+            cv2.imwrite(tmp_file.name, annotated_frame)
+            st.download_button(
+                label="Download Result Image",
+                data=open(tmp_file.name, "rb").read(),
+                file_name="detected_faces.jpg",
+                mime="image/jpeg"
+            )
+            os.unlink(tmp_file.name)
