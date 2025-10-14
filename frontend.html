@@ -1,62 +1,47 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Webcam Stream</title>
+  <title>Camera Capture</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background-color: #f0f0f0;
-    }
-    video {
-      border: 3px solid #4CAF50;
+    video, canvas {
       border-radius: 12px;
-      width: 80%;
-      max-width: 600px;
-      margin-top: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     }
-    button {
-      margin-top: 15px;
-      padding: 10px 20px;
-      font-size: 16px;
-      border: none;
-      background-color: #4CAF50;
-      color: white;
-      border-radius: 8px;
-      cursor: pointer;
-    }
+    #controls { margin-top: 10px; }
   </style>
 </head>
 <body>
-  <h2>🎥 Allow camera and click "Capture Frame"</h2>
-  <video id="webcam" autoplay playsinline></video>
-  <br>
-  <button id="capture">Capture Frame</button>
+  <video id="video" width="400" height="300" autoplay></video>
+  <div id="controls">
+    <button id="capture">📸 Capture</button>
+  </div>
+  <canvas id="canvas" width="400" height="300" style="display:none;"></canvas>
 
   <script>
-    const video = document.getElementById("webcam");
-    const captureButton = document.getElementById("capture");
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const captureBtn = document.getElementById('capture');
+    const context = canvas.getContext('2d');
 
-    // Ask for camera access
+    // Access webcam
     navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        video.srcObject = stream;
-      })
-      .catch(err => {
-        alert("Camera access denied: " + err);
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => alert("Camera access denied: " + err));
+
+    captureBtn.addEventListener('click', async () => {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/png');
+      const base64Data = dataUrl.split(',')[1];
+      const pycode = `
+import streamlit as st, base64
+st.session_state["captured_image"] = base64.b64decode("${base64Data}")
+`;
+      await fetch("/_stcore/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "code=" + encodeURIComponent(pycode)
       });
-
-    captureButton.addEventListener("click", () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = canvas.toDataURL("image/jpeg");
-
-      // Send image data to backend via query parameter
-      window.parent.postMessage({ type: "streamlit:setQueryParams", queryParams: { frame: imageData } }, "*");
+      alert("Image captured! Click 'Run' in Streamlit to process.");
     });
   </script>
 </body>
