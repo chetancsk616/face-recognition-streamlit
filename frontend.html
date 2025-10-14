@@ -7,7 +7,48 @@
       border-radius: 12px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     }
-    #controls { margin-top: 10px; }
+    #controls { margin-top: 10px; }<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Camera Feed</title>
+  <style>
+    video {
+      width: 100%;
+      max-width: 640px;
+      border-radius: 12px;
+      border: 2px solid #ccc;
+    }
+    #status {
+      font-family: Arial, sans-serif;
+      margin-top: 10px;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h3>🎥 Live Camera Feed</h3>
+  <video id="video" autoplay playsinline></video>
+  <p id="status">Initializing camera...</p>
+  <script>
+    const video = document.getElementById('video');
+    const status = document.getElementById('status');
+
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        status.textContent = "✅ Camera is active.";
+      } catch (err) {
+        status.textContent = "❌ Unable to access camera: " + err.message;
+      }
+    }
+
+    initCamera();
+  </script>
+</body>
+</html>
+
   </style>
 </head>
 <body>
