@@ -1,49 +1,63 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Camera Stream</title>
-  </head>
-  <body>
-    <video id="video" autoplay playsinline style="width: 90%; border-radius: 10px;"></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-    <img id="output" style="width: 90%; margin-top: 10px; border-radius: 10px;" />
+<head>
+  <meta charset="UTF-8">
+  <title>Webcam Stream</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+    }
+    video {
+      border: 3px solid #4CAF50;
+      border-radius: 12px;
+      width: 80%;
+      max-width: 600px;
+      margin-top: 10px;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>🎥 Allow camera and click "Capture Frame"</h2>
+  <video id="webcam" autoplay playsinline></video>
+  <br>
+  <button id="capture">Capture Frame</button>
 
-    <script>
-      async function startCamera() {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          document.getElementById("video").srcObject = stream;
-          console.log("Camera started!");
-        } catch (error) {
-          alert("Camera access denied or unavailable!");
-        }
-      }
+  <script>
+    const video = document.getElementById("webcam");
+    const captureButton = document.getElementById("capture");
 
-      async function sendFrame() {
-        const video = document.getElementById("video");
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Ask for camera access
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        alert("Camera access denied: " + err);
+      });
 
-        const frame = canvas.toDataURL("image/jpeg");
+    captureButton.addEventListener("click", () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = canvas.toDataURL("image/jpeg");
 
-        try {
-          const res = await fetch("https://chetancsk3000.streamlit.app/", {  // Replace with your Streamlit Cloud URL + '/detect'
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: frame }),
-          });
-          const data = await res.json();
-          document.getElementById("output").src = data.image;
-        } catch (e) {
-          console.error("Detection error:", e);
-        }
-      }
-
-      startCamera();
-      setInterval(sendFrame, 1500);
-    </script>
-  </body>
+      // Send image data to backend via query parameter
+      window.parent.postMessage({ type: "streamlit:setQueryParams", queryParams: { frame: imageData } }, "*");
+    });
+  </script>
+</body>
 </html>
