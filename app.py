@@ -1,23 +1,25 @@
+from ultralytics import YOLO
 import streamlit as st
 import cv2
-import numpy as np
-from ultralytics import YOLO
 
-st.set_page_config(page_title="Real-Time Face Detection", layout="wide")
-st.title("🧠 Real-Time Face Detection using YOLO (Streamlit + OpenCV)")
+st.title("🧠 Real-Time Face Detection (YOLO + Streamlit)")
 
-# Load pretrained face detection model
-model = YOLO("yolov8n-face.pt")  # small, fast, accurate face model
+model = YOLO("yolov8n-face.pt")
 
-st.info("Click 'Allow' when prompted to give camera permission.")
+st.info("Click 'Allow' to enable your webcam.")
 
-img_file_buffer = st.camera_input("Capture an image")
+run = st.checkbox("Start detection")
 
-if img_file_buffer:
-    bytes_data = img_file_buffer.getvalue()
-    img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+FRAME_WINDOW = st.image([])
+camera = cv2.VideoCapture(0)
 
-    results = model.predict(img, imgsz=640, conf=0.5, verbose=False)
+while run:
+    ret, frame = camera.read()
+    if not ret:
+        st.warning("No camera feed detected!")
+        break
+    results = model(frame)
     annotated_frame = results[0].plot()
+    FRAME_WINDOW.image(annotated_frame, channels="BGR")
 
-    st.image(annotated_frame, caption="Detected Faces", use_column_width=True)
+camera.release()
