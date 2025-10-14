@@ -1,39 +1,35 @@
 import streamlit as st
-import numpy as np
 import cv2
+import numpy as np
+from deepface import DeepFace
+import tempfile
 
-st.set_page_config(page_title="Face Detection with OpenCV", layout="wide")
+st.set_page_config(page_title="Face Recognition Demo", layout="wide")
+st.title("🎥 Real-Time Face Recognition using Laptop Camera")
 
-st.title("👁️ Face Detection using OpenCV")
+# Allow camera access
+st.info("Click 'Allow' when prompted to give camera permission.")
 
-st.write("Upload an image to detect faces. This demo runs fully on Streamlit Cloud — no dlib, no heavy build!")
+# Capture a frame from the laptop camera
+img_file_buffer = st.camera_input("Capture a photo")
 
-uploaded_file = st.file_uploader("Choose an image", type=["jpg", "jpeg", "png"])
+if img_file_buffer is not None:
+    # Convert the captured image to a format usable by OpenCV
+    bytes_data = img_file_buffer.getvalue()
+    img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+    rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    st.image(rgb_img, caption="Captured Image", use_column_width=True)
 
-if uploaded_file:
-    # Read the uploaded image
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1)
+    st.write("🔍 Analyzing face... please wait")
 
-    # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Load OpenCV's built-in Haar Cascade
-    face_cascade = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    )
-
-    # Detect faces
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-
-    # Draw rectangles around faces
-    for (x, y, w, h) in faces:
-        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-    st.image(
-        cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
-        caption=f"Detected Faces: {len(faces)}",
-        use_column_width=True,
-    )
-else:
-    st.info("👆 Upload an image to start face detection.")
+    try:
+        result = DeepFace.analyze(
+            rgb_img,
+            actions=['age', 'gender', 'emotion', 'race'],
+            enforce_detection=False
+        )
+        st.success("✅ Face detected and analyzed!")
+        st.json(result)
+    except Exception as e:
+        st.error(f"❌ Error: {e}")
