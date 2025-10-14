@@ -30,7 +30,7 @@
         const frame = canvas.toDataURL("image/jpeg");
 
         try {
-          const res = await fetch("https://face-detection.streamlit.app/detect", {  // Replace with your Streamlit Cloud URL + '/detect'
+          const res = await fetch("https://chetancsk3000.streamlit.app/", {  // Replace with your Streamlit Cloud URL + '/detect'
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ image: frame }),
