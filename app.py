@@ -1,49 +1,55 @@
 import streamlit as st
-import base64
 import cv2
+import tempfile
 import numpy as np
 from ultralytics import YOLO
 from PIL import Image
-import io
 
-st.set_page_config(page_title="Face Recognition App", layout="wide")
+st.set_page_config(page_title="Real-time Face Recognition", layout="wide")
 
-st.title("🎥 Face Recognition using YOLOv8")
+st.title("🎯 Real-time Face Detection App")
 
-# Load YOLO model safely
+# Load YOLO model (face detection)
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8n-face.pt")
+    try:
+        model = YOLO("yolov8n-face.pt")  # Make sure this file exists in your repo
+    except Exception as e:
+        st.error(f"Error loading YOLO model: {e}")
+        st.stop()
+    return model
 
 model = load_model()
 
-# JavaScript frontend loader
-with open("frontend.html", "r") as f:
-    frontend_html = f.read()
+# Camera input (Streamlit widget)
+st.sidebar.header("📷 Camera Settings")
+use_camera = st.sidebar.toggle("Use Camera", value=True)
 
-# Display webcam capture UI
-st.components.v1.html(frontend_html, height=500)
+if use_camera:
+    st.info("Turn on your camera and allow browser access.")
+    camera_input = st.camera_input("Capture a Frame")
+else:
+    camera_input = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
 
-# Streamlit receives image data from JS
-img_data = st.session_state.get("img_data", None)
+# Display and detect
+if camera_input is not None:
+    with st.spinner("Processing..."):
+        img = Image.open(camera_input)
+        img_array = np.array(img)
 
-if "captured_image" not in st.session_state:
-    st.session_state.captured_image = None
+        # Run YOLO face detection
+        results = model.predict(source=img_array, conf=0.5, verbose=False)
+        boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
 
-uploaded_file = st.file_uploader("Or upload an image", type=["jpg", "jpeg", "png"])
+        # Draw boxes on the image
+        for (x1, y1, x2, y2) in boxes:
+            cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-# Display image from either webcam or upload
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.session_state.captured_image = image
+        # Convert BGR → RGB and display
+        st.image(img_array, caption="Detected Faces", use_column_width=True)
 
-if st.session_state.captured_image is not None:
-    st.image(st.session_state.captured_image, caption="Captured Image", use_column_width=True)
+else:
+    st.warning("Please capture or upload an image to start detection.")
 
-    # Convert to OpenCV format
-    img_array = np.array(st.session_state.captured_image)
-    results = model(img_array)
-
-    # Draw bounding boxes
-    annotated = results[0].plot()
-    st.image(annotated, caption="Detection Result", use_column_width=True)
+st.markdown("---")
+st.caption("Built with ❤️ using Streamlit + YOLOv8")
