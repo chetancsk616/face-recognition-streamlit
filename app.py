@@ -1,39 +1,46 @@
-import cv2
 import streamlit as st
+import cv2
+import numpy as np
+import base64
+from io import BytesIO
+from PIL import Image
 
-# Set page title
-st.title("Real-Time Face Detection with OpenCV")
+st.set_page_config(page_title="Face Detection API", layout="wide")
+st.title("📡 Face Detection API (via POST upload)")
 
-# Load the pre-trained Haar Cascade model
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
-# Start webcam (Streamlit handles video via image update)
-run = st.checkbox('Start Camera')
+def detect_faces(image_bytes):
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-FRAME_WINDOW = st.image([])
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(30, 30))
 
-camera = cv2.VideoCapture(0)
-
-while run:
-    ret, frame = camera.read()
-    if not ret:
-        st.warning("Failed to access camera.")
-        break
-
-    # Convert to grayscale
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    # Detect faces
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-
-    # Draw rectangles
     for (x, y, w, h) in faces:
-        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-    # Convert color for Streamlit display
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    FRAME_WINDOW.image(frame)
+    _, buf = cv2.imencode('.jpg', img)
+    img_base64 = base64.b64encode(buf).decode('utf-8')
+    return img_base64, len(faces)
 
-else:
-    camera.release()
-    st.write("Stopped")
+# Simulated endpoint using Streamlit form
+st.write("### Upload image manually to test")
+file = st.file_uploader("Upload image", type=["jpg", "jpeg", "png"])
+if file:
+    img_b64, count = detect_faces(file.read())
+    st.image(Image.open(BytesIO(base64.b64decode(img_b64))), caption=f"{count} face(s) detected.")
+
+# Simple API mock (since Streamlit doesn’t have native Flask-like endpoints)
+from streamlit.web.server.websocket_headers import _get_websocket_headers
+from streamlit.runtime.scriptrunner import get_script_run_ctx
+from streamlit.runtime.runtime import Runtime
+
+# Define a fake REST-like route via query param
+query_params = st.experimental_get_query_params()
+if "api" in query_params and query_params["api"][0] == "analyze":
+    import os, json
+    if "file" in st.session_state:
+        image_bytes = st.session_state["file"]
+        img_b64, count = detect_faces(image_bytes)
+        st.json({"faces": count, "image": img_b64})
