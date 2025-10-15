@@ -1,89 +1,85 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Camera Capture</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>💡 Smart Light Demo (Face Detection)</title>
   <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #121212;
+      color: #eee;
+      margin: 0;
+      padding: 0;
+    }
     video, canvas {
       border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      margin-top: 20px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.5);
     }
-    #controls { margin-top: 10px; }<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Camera Feed</title>
-  <style>
-    video {
-      width: 100%;
-      max-width: 640px;
-      border-radius: 12px;
-      border: 2px solid #ccc;
+    h1 {
+      margin-top: 20px;
+      color: #00e6e6;
     }
     #status {
-      font-family: Arial, sans-serif;
-      margin-top: 10px;
-      color: green;
+      margin-top: 15px;
+      font-size: 1.5rem;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <h3>🎥 Live Camera Feed</h3>
-  <video id="video" autoplay playsinline></video>
-  <p id="status">Initializing camera...</p>
+  <h1>💡 Smart Light Face Detection</h1>
+  <video id="video" width="640" height="480" autoplay muted></video>
+  <canvas id="overlay" width="640" height="480"></canvas>
+  <h2 id="status">🌑 Light OFF</h2>
+
+  <!-- Face API JS -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+
   <script>
     const video = document.getElementById('video');
-    const status = document.getElementById('status');
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const statusText = document.getElementById('status');
+    let lightOn = false;
+    let lastFaceTime = Date.now();
 
-    async function initCamera() {
+    async function startVideo() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
         video.srcObject = stream;
-        status.textContent = "✅ Camera is active.";
       } catch (err) {
-        status.textContent = "❌ Unable to access camera: " + err.message;
+        alert("Camera access denied or unavailable.");
       }
     }
 
-    initCamera();
-  </script>
-</body>
-</html>
+    async function init() {
+      await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
+      startVideo();
+    }
 
-  </style>
-</head>
-<body>
-  <video id="video" width="400" height="300" autoplay></video>
-  <div id="controls">
-    <button id="capture">📸 Capture</button>
-  </div>
-  <canvas id="canvas" width="400" height="300" style="display:none;"></canvas>
+    video.addEventListener('play', () => {
+      const options = new faceapi.TinyFaceDetectorOptions();
+      setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video, options);
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        faceapi.draw.drawDetections(overlay, detections);
 
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const captureBtn = document.getElementById('capture');
-    const context = canvas.getContext('2d');
+        if (detections.length > 0) {
+          lightOn = true;
+          lastFaceTime = Date.now();
+        } else if (Date.now() - lastFaceTime > 3000) {
+          lightOn = false;
+        }
 
-    // Access webcam
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => { video.srcObject = stream; })
-      .catch(err => alert("Camera access denied: " + err));
-
-    captureBtn.addEventListener('click', async () => {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/png');
-      const base64Data = dataUrl.split(',')[1];
-      const pycode = `
-import streamlit as st, base64
-st.session_state["captured_image"] = base64.b64decode("${base64Data}")
-`;
-      await fetch("/_stcore/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "code=" + encodeURIComponent(pycode)
-      });
-      alert("Image captured! Click 'Run' in Streamlit to process.");
+        statusText.textContent = lightOn ? "💡 Light ON" : "🌑 Light OFF";
+        statusText.style.color = lightOn ? "#00ff00" : "#ff4444";
+      }, 200);
     });
+
+    init();
   </script>
 </body>
 </html>
