@@ -1,62 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Offline Face Detection (OpenCV.js DNN)</title>
+  <meta charset="UTF-8">
+  <title>Offline Face Detection | OpenCV.js DNN</title>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #f2f2f2; }
-    #canvasOutput { margin-top: 20px; border-radius: 10px; }
-    #upload { margin-top: 20px; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f5f6fa;
+      color: #222;
+      text-align: center;
+      padding: 30px;
+    }
+    .container {
+      background: #fff;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 20px 25px;
+      border-radius: 15px;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    #status {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    #upload {
+      margin: 15px 0;
+    }
+    canvas {
+      display: block;
+      margin: 15px auto;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 100%;
+    }
+    .btn {
+      background: #0078d7;
+      color: white;
+      padding: 8px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      border: none;
+      margin-top: 5px;
+    }
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
-  <h2>Offline Face Detection using OpenCV.js (DNN)</h2>
-  <input type="file" id="upload" accept="image/*">
-  <canvas id="canvasOutput"></canvas>
+  <div class="container">
+    <h1>Offline Face Detection (OpenCV.js DNN)</h1>
+    <p id="status">🕓 Loading OpenCV.js, please wait...</p>
+
+    <input type="file" id="upload" accept="image/*" disabled />
+    <button id="detectBtn" class="btn" disabled>🔍 Detect Faces</button>
+    <canvas id="canvasOutput"></canvas>
+  </div>
 
   <script async src="opencv.js" onload="onOpenCvReady();"></script>
   <script>
-    let net;
+    let net, imgElement, mat;
+    const statusEl = document.getElementById('status');
+    const upload = document.getElementById('upload');
+    const detectBtn = document.getElementById('detectBtn');
+    const canvas = document.getElementById('canvasOutput');
 
     async function onOpenCvReady() {
-      console.log("OpenCV.js loaded");
-      // Load model files locally
-      const prototxt = await fetch('deploy.prototxt').then(r => r.arrayBuffer());
-      const model = await fetch('res10_300x300_ssd_iter_140000.caffemodel').then(r => r.arrayBuffer());
-
-      net = cv.readNetFromCaffe(
-        new Uint8Array(prototxt),
-        new Uint8Array(model)
-      );
-      console.log("Model loaded!");
+      statusEl.textContent = "✅ OpenCV.js loaded. Loading face model...";
+      try {
+        // Load the Caffe model files
+        const prototxt = await fetch('deploy.prototxt').then(r => r.arrayBuffer());
+        const model = await fetch('res10_300x300_ssd_iter_140000.caffemodel').then(r => r.arrayBuffer());
+        net = cv.readNetFromCaffe(new Uint8Array(prototxt), new Uint8Array(model));
+        statusEl.textContent = "✅ Model loaded successfully! Upload an image.";
+        upload.disabled = false;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "❌ Failed to load model. Check files.";
+      }
     }
 
-    document.getElementById('upload').addEventListener('change', async (e) => {
+    upload.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      img.onload = () => detectFace(img);
+      const reader = new FileReader();
+      reader.onload = function() {
+        const img = new Image();
+        img.onload = function() {
+          imgElement = img;
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          detectBtn.disabled = false;
+          statusEl.textContent = "📸 Image ready. Click 'Detect Faces'.";
+        }
+        img.src = reader.result;
+      }
+      reader.readAsDataURL(file);
     });
 
-    function detectFace(imgElement) {
-      if (!net) {
-        alert("Model not yet loaded!");
-        return;
-      }
+    detectBtn.onclick = () => {
+      if (!imgElement || !net) return alert("Model or image not ready!");
+      detectBtn.disabled = true;
+      statusEl.textContent = "🔎 Detecting faces... please wait.";
 
-      const mat = cv.imread(imgElement);
-      const blob = cv.blobFromImage(mat, 1.0, new cv.Size(300, 300),
-                  new cv.Scalar(104, 177, 123), false, false);
+      // Run DNN detection
+      mat = cv.imread(imgElement);
+      const blob = cv.blobFromImage(mat, 1.0, new cv.Size(300, 300), new cv.Scalar(104, 177, 123));
       net.setInput(blob);
       const detections = net.forward();
 
       const cols = mat.cols;
       const rows = mat.rows;
+      let faceCount = 0;
       for (let i = 0; i < detections.size[2]; i++) {
         const confidence = detections.data32F[i * 7 + 2];
         if (confidence > 0.5) {
+          faceCount++;
           const x1 = detections.data32F[i * 7 + 3] * cols;
           const y1 = detections.data32F[i * 7 + 4] * rows;
           const x2 = detections.data32F[i * 7 + 5] * cols;
@@ -69,7 +138,14 @@
       mat.delete();
       blob.delete();
       detections.delete();
-    }
+      detectBtn.disabled = false;
+
+      if (faceCount > 0) {
+        statusEl.textContent = `✅ Detected ${faceCount} face(s).`;
+      } else {
+        statusEl.textContent = "❌ No faces detected.";
+      }
+    };
   </script>
 </body>
 </html>
