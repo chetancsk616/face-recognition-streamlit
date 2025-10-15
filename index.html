@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>💡 Smart Light Detection</title>
+  <title>💡 Smart Light Detection (Face Detection)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -83,14 +83,17 @@
     const statusText = document.getElementById('status');
     const ctx = overlay.getContext('2d');
     let imageLoaded = false;
+    let modelsLoaded = false;
 
-    // Load face detection model
+    // Load model files from GitHub (working links)
     async function initModels() {
-      await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
-      console.log("✅ Models loaded successfully");
+      const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models/';
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      modelsLoaded = true;
+      console.log("✅ Face detection model loaded successfully!");
     }
 
-    // Load selected image
+    // Load image into <img>
     function loadImage(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -103,7 +106,7 @@
       });
     }
 
-    // Handle file upload
+    // When file uploaded
     uploadInput.addEventListener('change', async (event) => {
       const file = event.target.files[0];
       if (!file) return;
@@ -116,6 +119,10 @@
 
     // Detect faces when button clicked
     detectButton.addEventListener('click', async () => {
+      if (!modelsLoaded) {
+        alert("Please wait — model still loading...");
+        return;
+      }
       if (!imageLoaded) {
         alert("Please upload an image first!");
         return;
