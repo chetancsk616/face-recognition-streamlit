@@ -2,205 +2,61 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Offline Face Detection Debug | OpenCV.js DNN</title>
+  <title>Face Detection using face-api.js</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
   <style>
     body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #f5f6fa;
-      color: #222;
-      text-align: center;
-      padding: 30px;
-    }
-    .container {
-      background: #fff;
-      max-width: 540px;
-      margin: 0 auto;
-      padding: 20px 25px;
-      border-radius: 15px;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-    }
-    h1 {
-      font-size: 20px;
-      margin-bottom: 10px;
-      color: #333;
-    }
-    #upload {
-      margin: 15px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: sans-serif;
+      margin-top: 40px;
     }
     canvas {
-      display: block;
-      margin: 15px auto;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      max-width: 100%;
+      margin-top: 10px;
+      border: 2px solid #4CAF50;
     }
-    .btn {
-      background: #0078d7;
-      color: white;
-      padding: 8px 15px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      border: none;
-      margin-top: 5px;
-    }
-    .btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    #log {
-      text-align: left;
-      font-family: monospace;
-      background: #111;
-      color: #0f0;
-      padding: 10px;
-      margin-top: 15px;
-      border-radius: 8px;
-      max-height: 220px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      font-size: 13px;
-    }
-    .error { color: #f33; }
-    .warn { color: #ff0; }
-    .info { color: #0f0; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Offline Face Detection (OpenCV.js DNN)</h1>
-    <p>Upload an image — debug logs below show model loading details.</p>
+  <h1>Face Detection (Offline)</h1>
+  <input type="file" id="upload" accept="image/*" />
+  <canvas id="canvas"></canvas>
 
-    <input type="file" id="upload" accept="image/*" disabled />
-    <button id="detectBtn" class="btn" disabled>🔍 Detect Faces</button>
-    <canvas id="canvasOutput"></canvas>
-
-    <div id="log">[Log Output]</div>
-  </div>
-
-  <script async src="opencv.js" onload="onOpenCvReady();"></script>
   <script>
-    let net, imgElement, mat;
     const upload = document.getElementById('upload');
-    const detectBtn = document.getElementById('detectBtn');
-    const logDiv = document.getElementById('log');
+    const canvas = document.getElementById('canvas');
 
-    function log(msg, type = "info") {
-      const time = new Date().toLocaleTimeString();
-      const color = type === "error" ? "error" : type === "warn" ? "warn" : "info";
-      logDiv.innerHTML += `<div class="${color}">[${time}] ${msg}</div>`;
-      logDiv.scrollTop = logDiv.scrollHeight;
-      console.log(`[${time}] ${msg}`);
+    // Load the tiny face detector model
+    async function loadModels() {
+      await faceapi.nets.tinyFaceDetector.loadFromUri('models/');
+      console.log("✅ Model loaded successfully!");
     }
 
-    async function fetchBinary(url, label) {
-      try {
-        log(`📂 Fetching ${label}: ${url}`);
-        const response = await fetch(url);
-        if (!response.ok) {
-          log(`❌ Failed to fetch ${label} (HTTP ${response.status})`, "error");
-          return null;
-        }
-        const buf = await response.arrayBuffer();
-        log(`✅ ${label} loaded (${buf.byteLength.toLocaleString()} bytes)`);
-        return new Uint8Array(buf);
-      } catch (err) {
-        log(`⚠️ Error fetching ${label}: ${err.message}`, "error");
-        return null;
-      }
-    }
+    loadModels();
 
-    async function onOpenCvReady() {
-      log("✅ OpenCV.js loaded.");
-      try {
-        log("📦 Starting to load face detection model files...");
-        const proto = await fetchBinary("deploy.prototxt", "deploy.prototxt");
-        const model = await fetchBinary("res10_300x300_ssd_iter_140000.caffemodel", "caffemodel");
-
-        if (!proto || !model) {
-          log("❌ One or more model files failed to load. Check paths or server.", "error");
-          return;
-        }
-
-        log("🧠 Parsing Caffe model with OpenCV...");
-        try {
-          net = cv.readNetFromCaffe(proto, model);
-          if (!net) throw new Error("cv.readNetFromCaffe() returned null.");
-          log("✅ Model successfully parsed by OpenCV!");
-        } catch (cvErr) {
-          log("❌ OpenCV parse error: " + cvErr.message, "error");
-          return;
-        }
-
-        upload.disabled = false;
-        log("📂 Ready for image upload.");
-      } catch (err) {
-        log("❌ General model load error: " + err.message, "error");
-      }
-    }
-
-    upload.addEventListener("change", (e) => {
+    upload.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      log(`📸 Selected file: ${file.name}`);
-      const reader = new FileReader();
-      reader.onload = function() {
-        const img = new Image();
-        img.onload = function() {
-          imgElement = img;
-          const ctx = canvasOutput.getContext("2d");
-          canvasOutput.width = img.width;
-          canvasOutput.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          detectBtn.disabled = false;
-          log("✅ Image loaded into canvas. Ready to detect.");
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
+
+      const img = await faceapi.bufferToImage(file);
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      // Run face detection
+      const detections = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions());
+      console.log("Detections:", detections);
+
+      // Draw bounding boxes
+      detections.forEach(det => {
+        const { x, y, width, height } = det.box;
+        ctx.strokeStyle = "lime";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+      });
     });
-
-    detectBtn.onclick = () => {
-      if (!imgElement || !net) {
-        log("⚠️ Model or image not ready.", "warn");
-        return;
-      }
-      detectBtn.disabled = true;
-      log("🔍 Running face detection...");
-
-      mat = cv.imread(imgElement);
-      const blob = cv.blobFromImage(mat, 1.0, new cv.Size(300, 300),
-                  new cv.Scalar(104, 177, 123));
-      net.setInput(blob);
-      const detections = net.forward();
-
-      const cols = mat.cols;
-      const rows = mat.rows;
-      let faceCount = 0;
-      for (let i = 0; i < detections.size[2]; i++) {
-        const confidence = detections.data32F[i * 7 + 2];
-        if (confidence > 0.5) {
-          faceCount++;
-          const x1 = detections.data32F[i * 7 + 3] * cols;
-          const y1 = detections.data32F[i * 7 + 4] * rows;
-          const x2 = detections.data32F[i * 7 + 5] * cols;
-          const y2 = detections.data32F[i * 7 + 6] * rows;
-          cv.rectangle(mat, new cv.Point(x1, y1), new cv.Point(x2, y2), [0, 255, 0, 255], 2);
-        }
-      }
-
-      cv.imshow("canvasOutput", mat);
-      mat.delete();
-      blob.delete();
-      detections.delete();
-      detectBtn.disabled = false;
-
-      if (faceCount > 0) {
-        log(`✅ Detection complete — ${faceCount} face(s) found.`);
-      } else {
-        log("❌ No faces detected in this image.", "warn");
-      }
-    };
   </script>
 </body>
 </html>
