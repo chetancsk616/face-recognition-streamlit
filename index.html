@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Offline Face Detection Demo</title>
+  <title>Offline Face Detection (SSD Mobilenet V1)</title>
 
   <style>
     body {
@@ -16,7 +16,6 @@
     }
 
     h1 {
-      margin-top: 10px;
       color: #00bfff;
     }
 
@@ -66,8 +65,8 @@
   </style>
 </head>
 <body>
-  <h1>Offline Face Detection</h1>
-  <p>Upload a photo, then click “Detect Faces”. Works fully offline.</p>
+  <h1>Offline Face Detection (SSD Mobilenet V1)</h1>
+  <p>Upload a photo and click “Detect Faces”. Works fully offline.</p>
 
   <div class="container">
     <input type="file" id="imageUpload" accept="image/*" />
@@ -94,10 +93,10 @@
 
     let modelLoaded = false;
 
-    // Load model from local folder
+    // Load SSD Mobilenet V1 model
     async function loadModels() {
       try {
-        await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+        await faceapi.nets.ssdMobilenetv1.loadFromUri('./models');
         modelLoaded = true;
         statusText.innerText = '✅ Model loaded. Upload an image to begin.';
       } catch (error) {
@@ -138,10 +137,7 @@
 
       statusText.innerText = 'Detecting faces...';
 
-      const detections = await faceapi.detectAllFaces(
-        inputImage,
-        new faceapi.TinyFaceDetectorOptions()
-      );
+      const detections = await faceapi.detectAllFaces(inputImage);
 
       const ctx = overlay.getContext('2d');
       ctx.clearRect(0, 0, overlay.width, overlay.height);
