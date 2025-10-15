@@ -2,65 +2,73 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Face Detection - face-api.js</title>
+  <title>Face Detection | face-api.js (SSD Mobilenet v1)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f5f6fa;
       text-align: center;
+      background: #f5f6fa;
       padding: 20px;
     }
     canvas {
-      margin-top: 15px;
+      margin-top: 10px;
       border: 2px solid #4CAF50;
       border-radius: 10px;
     }
   </style>
 
-  <!-- ✅ Load face-api.min.js BEFORE any script uses it -->
-  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-</head>
-<body>
-  <h2>📸 Face Detection using face-api.min.js</h2>
-  <input type="file" id="upload" accept="image/*" />
-  <canvas id="canvas"></canvas>
-
-  <script>
-    const upload = document.getElementById("upload");
-    const canvas = document.getElementById("canvas");
-
+  <!-- ✅ Load face-api.min.js -->
+  <script defer src="./face-api.min.js"></script>
+  <!-- ✅ Load your custom JS after the library -->
+  <script defer>
     async function loadModels() {
-      console.log("Loading models...");
-      // ✅ Use TinyFaceDetector (lightweight, no YOLO needed)
-      await faceapi.nets.tinyFaceDetector.loadFromUri("https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/");
-      console.log("✅ Models loaded");
+      const modelPath = './models';
+      console.log("🧠 Loading SSD Mobilenet v1 model from:", modelPath);
+      await faceapi.nets.ssdMobilenetv1.loadFromUri(modelPath);
+      console.log("✅ Model loaded successfully!");
     }
 
-    // Ensure models load before file handling
-    loadModels().then(() => {
-      upload.addEventListener("change", async (e) => {
+    async function detectFaces(image) {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const detections = await faceapi.detectAllFaces(image, new faceapi.SsdMobilenetv1Options());
+
+      ctx.drawImage(image, 0, 0);
+      detections.forEach(det => {
+        const { x, y, width, height } = det.box;
+        ctx.strokeStyle = 'lime';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, width, height);
+      });
+
+      console.log(`✅ ${detections.length} face(s) detected`);
+    }
+
+    async function main() {
+      await loadModels();
+
+      const upload = document.getElementById('upload');
+      const canvas = document.getElementById('canvas');
+
+      upload.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         const img = await faceapi.bufferToImage(file);
         canvas.width = img.width;
         canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0);
 
-        console.log("Detecting faces...");
-        const detections = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions());
-
-        detections.forEach(det => {
-          const { x, y, width, height } = det.box;
-          ctx.strokeStyle = "lime";
-          ctx.lineWidth = 3;
-          ctx.strokeRect(x, y, width, height);
-        });
-
-        console.log(`✅ ${detections.length} face(s) detected`);
+        await detectFaces(img);
       });
-    });
+    }
+
+    window.addEventListener('DOMContentLoaded', main);
   </script>
+</head>
+<body>
+  <h2>📸 Face Detection using face-api.js (SSD Mobilenet v1)</h2>
+  <input type="file" id="upload" accept="image/*" />
+  <canvas id="canvas"></canvas>
 </body>
 </html>
