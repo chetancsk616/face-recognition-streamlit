@@ -1,75 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Face Detection using face-api.min.js</title>
-
-  <!-- ✅ Use minified version of face-api -->
-  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-
+  <meta charset="UTF-8" />
+  <title>Face Detection - face-api.js</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 40px;
+      background: #f5f6fa;
+      text-align: center;
+      padding: 20px;
     }
-    #canvas {
-      margin-top: 10px;
-      border-radius: 8px;
-      border: 2px solid #4CAF50;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-    }
-    input {
+    canvas {
       margin-top: 15px;
+      border: 2px solid #4CAF50;
+      border-radius: 10px;
     }
   </style>
+
+  <!-- ✅ Load face-api.min.js BEFORE any script uses it -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body>
-  <h2>📸 Face Detection (face-api.min.js)</h2>
-  <p>Upload an image to detect faces:</p>
+  <h2>📸 Face Detection using face-api.min.js</h2>
   <input type="file" id="upload" accept="image/*" />
   <canvas id="canvas"></canvas>
 
-  <script defer>
+  <script>
     const upload = document.getElementById("upload");
     const canvas = document.getElementById("canvas");
 
     async function loadModels() {
-      // Load the tiny face detector model from the CDN
+      console.log("Loading models...");
+      // ✅ Use TinyFaceDetector (lightweight, no YOLO needed)
       await faceapi.nets.tinyFaceDetector.loadFromUri("https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/");
-      console.log("✅ Models loaded successfully!");
+      console.log("✅ Models loaded");
     }
 
-    loadModels();
+    // Ensure models load before file handling
+    loadModels().then(() => {
+      upload.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    upload.addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+        const img = await faceapi.bufferToImage(file);
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
 
-      const img = await faceapi.bufferToImage(file);
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
+        console.log("Detecting faces...");
+        const detections = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions());
 
-      const detections = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions());
-      console.log("Detections:", detections);
+        detections.forEach(det => {
+          const { x, y, width, height } = det.box;
+          ctx.strokeStyle = "lime";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x, y, width, height);
+        });
 
-      detections.forEach(det => {
-        const { x, y, width, height } = det.box;
-        ctx.strokeStyle = "lime";
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, width, height);
-      });
-
-      if (detections.length === 0) {
-        console.log("❌ No faces detected");
-      } else {
         console.log(`✅ ${detections.length} face(s) detected`);
-      }
+      });
     });
   </script>
 </body>
