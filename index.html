@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Offline Face Detection | OpenCV.js DNN</title>
+  <title>Offline Face Detection Debug | OpenCV.js DNN</title>
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
@@ -13,7 +13,7 @@
     }
     .container {
       background: #fff;
-      max-width: 480px;
+      max-width: 540px;
       margin: 0 auto;
       padding: 20px 25px;
       border-radius: 15px;
@@ -56,17 +56,20 @@
       padding: 10px;
       margin-top: 15px;
       border-radius: 8px;
-      max-height: 180px;
+      max-height: 220px;
       overflow-y: auto;
       white-space: pre-wrap;
       font-size: 13px;
     }
+    .error { color: #f33; }
+    .warn { color: #ff0; }
+    .info { color: #0f0; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Offline Face Detection (OpenCV.js DNN)</h1>
-    <p>Upload an image and detect faces using OpenCV.js — fully offline.</p>
+    <p>Upload an image — debug logs below show model loading details.</p>
 
     <input type="file" id="upload" accept="image/*" disabled />
     <button id="detectBtn" class="btn" disabled>🔍 Detect Faces</button>
@@ -82,29 +85,61 @@
     const detectBtn = document.getElementById('detectBtn');
     const logDiv = document.getElementById('log');
 
-    function log(msg) {
-      logDiv.textContent += "\n" + msg;
+    function log(msg, type = "info") {
+      const time = new Date().toLocaleTimeString();
+      const color = type === "error" ? "error" : type === "warn" ? "warn" : "info";
+      logDiv.innerHTML += `<div class="${color}">[${time}] ${msg}</div>`;
       logDiv.scrollTop = logDiv.scrollHeight;
-      console.log(msg);
+      console.log(`[${time}] ${msg}`);
+    }
+
+    async function fetchBinary(url, label) {
+      try {
+        log(`📂 Fetching ${label}: ${url}`);
+        const response = await fetch(url);
+        if (!response.ok) {
+          log(`❌ Failed to fetch ${label} (HTTP ${response.status})`, "error");
+          return null;
+        }
+        const buf = await response.arrayBuffer();
+        log(`✅ ${label} loaded (${buf.byteLength.toLocaleString()} bytes)`);
+        return new Uint8Array(buf);
+      } catch (err) {
+        log(`⚠️ Error fetching ${label}: ${err.message}`, "error");
+        return null;
+      }
     }
 
     async function onOpenCvReady() {
       log("✅ OpenCV.js loaded.");
       try {
-        log("📦 Loading face detection model files...");
-        const prototxt = await fetch('deploy.prototxt').then(r => r.arrayBuffer());
-        const model = await fetch('res10_300x300_ssd_iter_140000.caffemodel').then(r => r.arrayBuffer());
-        net = cv.readNetFromCaffe(new Uint8Array(prototxt), new Uint8Array(model));
-        log("✅ Model successfully loaded!");
+        log("📦 Starting to load face detection model files...");
+        const proto = await fetchBinary("deploy.prototxt", "deploy.prototxt");
+        const model = await fetchBinary("res10_300x300_ssd_iter_140000.caffemodel", "caffemodel");
+
+        if (!proto || !model) {
+          log("❌ One or more model files failed to load. Check paths or server.", "error");
+          return;
+        }
+
+        log("🧠 Parsing Caffe model with OpenCV...");
+        try {
+          net = cv.readNetFromCaffe(proto, model);
+          if (!net) throw new Error("cv.readNetFromCaffe() returned null.");
+          log("✅ Model successfully parsed by OpenCV!");
+        } catch (cvErr) {
+          log("❌ OpenCV parse error: " + cvErr.message, "error");
+          return;
+        }
+
         upload.disabled = false;
         log("📂 Ready for image upload.");
       } catch (err) {
-        console.error(err);
-        log("❌ Error: Model failed to load. Check local files.");
+        log("❌ General model load error: " + err.message, "error");
       }
     }
 
-    upload.addEventListener('change', (e) => {
+    upload.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
       log(`📸 Selected file: ${file.name}`);
@@ -113,7 +148,7 @@
         const img = new Image();
         img.onload = function() {
           imgElement = img;
-          const ctx = canvasOutput.getContext('2d');
+          const ctx = canvasOutput.getContext("2d");
           canvasOutput.width = img.width;
           canvasOutput.height = img.height;
           ctx.drawImage(img, 0, 0);
@@ -127,7 +162,7 @@
 
     detectBtn.onclick = () => {
       if (!imgElement || !net) {
-        log("⚠️ Model or image not ready.");
+        log("⚠️ Model or image not ready.", "warn");
         return;
       }
       detectBtn.disabled = true;
@@ -163,7 +198,7 @@
       if (faceCount > 0) {
         log(`✅ Detection complete — ${faceCount} face(s) found.`);
       } else {
-        log("❌ No faces detected in this image.");
+        log("❌ No faces detected in this image.", "warn");
       }
     };
   </script>
