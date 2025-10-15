@@ -2,159 +2,74 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Offline Face Detection (SSD Mobilenet V1)</title>
-
+  <title>Offline Face Detection (OpenCV.js DNN)</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #101820;
-      color: #fff;
-      text-align: center;
-      margin: 0;
-      padding: 20px;
-    }
-
-    h1 {
-      color: #00bfff;
-    }
-
-    .container {
-      margin-top: 30px;
-    }
-
-    #imageUpload {
-      margin: 20px 0;
-      padding: 10px;
-      border: 2px solid #00bfff;
-      border-radius: 8px;
-      background: #14243a;
-      color: #fff;
-    }
-
-    #detectBtn {
-      padding: 10px 20px;
-      background: #00bfff;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-
-    #detectBtn:hover {
-      background: #0096c7;
-    }
-
-    #canvasContainer {
-      position: relative;
-      display: inline-block;
-      margin-top: 20px;
-    }
-
-    canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-
-    #status {
-      margin-top: 20px;
-      color: #aaa;
-    }
+    body { font-family: sans-serif; text-align: center; background: #f2f2f2; }
+    #canvasOutput { margin-top: 20px; border-radius: 10px; }
+    #upload { margin-top: 20px; }
   </style>
 </head>
 <body>
-  <h1>Offline Face Detection (SSD Mobilenet V1)</h1>
-  <p>Upload a photo and click “Detect Faces”. Works fully offline.</p>
+  <h2>Offline Face Detection using OpenCV.js (DNN)</h2>
+  <input type="file" id="upload" accept="image/*">
+  <canvas id="canvasOutput"></canvas>
 
-  <div class="container">
-    <input type="file" id="imageUpload" accept="image/*" />
-    <br />
-    <button id="detectBtn">Detect Faces</button>
-  </div>
-
-  <div id="canvasContainer">
-    <img id="inputImage" style="max-width: 90%; display: none;" />
-    <canvas id="overlay"></canvas>
-  </div>
-
-  <p id="status">Loading model, please wait...</p>
-
-  <!-- Offline face-api.js -->
-  <script src="./face-api.min.js"></script>
-
+  <script async src="opencv.js" onload="onOpenCvReady();"></script>
   <script>
-    const imageUpload = document.getElementById('imageUpload');
-    const detectBtn = document.getElementById('detectBtn');
-    const inputImage = document.getElementById('inputImage');
-    const overlay = document.getElementById('overlay');
-    const statusText = document.getElementById('status');
+    let net;
 
-    let modelLoaded = false;
+    async function onOpenCvReady() {
+      console.log("OpenCV.js loaded");
+      // Load model files locally
+      const prototxt = await fetch('deploy.prototxt').then(r => r.arrayBuffer());
+      const model = await fetch('res10_300x300_ssd_iter_140000.caffemodel').then(r => r.arrayBuffer());
 
-    // Load SSD Mobilenet V1 model
-    async function loadModels() {
-      try {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri('./models');
-        modelLoaded = true;
-        statusText.innerText = '✅ Model loaded. Upload an image to begin.';
-      } catch (error) {
-        console.error(error);
-        statusText.innerText = '❌ Failed to load model. Check your folder paths.';
-      }
+      net = cv.readNetFromCaffe(
+        new Uint8Array(prototxt),
+        new Uint8Array(model)
+      );
+      console.log("Model loaded!");
     }
 
-    loadModels();
-
-    // Display uploaded image
-    imageUpload.addEventListener('change', () => {
-      const file = imageUpload.files[0];
+    document.getElementById('upload').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        inputImage.src = reader.result;
-        inputImage.onload = () => {
-          statusText.innerText = "Image loaded. Click 'Detect Faces'.";
-          overlay.width = inputImage.width;
-          overlay.height = inputImage.height;
-          inputImage.style.display = 'block';
-        };
-      };
-      reader.readAsDataURL(file);
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => detectFace(img);
     });
 
-    // Detect faces when button clicked
-    detectBtn.addEventListener('click', async () => {
-      if (!modelLoaded) {
-        statusText.innerText = 'Please wait - model still loading...';
-        return;
-      }
-      if (!inputImage.src) {
-        statusText.innerText = 'Please upload an image first.';
+    function detectFace(imgElement) {
+      if (!net) {
+        alert("Model not yet loaded!");
         return;
       }
 
-      statusText.innerText = 'Detecting faces...';
+      const mat = cv.imread(imgElement);
+      const blob = cv.blobFromImage(mat, 1.0, new cv.Size(300, 300),
+                  new cv.Scalar(104, 177, 123), false, false);
+      net.setInput(blob);
+      const detections = net.forward();
 
-      const detections = await faceapi.detectAllFaces(inputImage);
-
-      const ctx = overlay.getContext('2d');
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#00FF00';
-
-      detections.forEach((detection) => {
-        const box = detection.box;
-        ctx.strokeRect(box.x, box.y, box.width, box.height);
-      });
-
-      if (detections.length > 0) {
-        statusText.innerText = `✅ Detected ${detections.length} face(s).`;
-      } else {
-        statusText.innerText = '😕 No faces detected.';
+      const cols = mat.cols;
+      const rows = mat.rows;
+      for (let i = 0; i < detections.size[2]; i++) {
+        const confidence = detections.data32F[i * 7 + 2];
+        if (confidence > 0.5) {
+          const x1 = detections.data32F[i * 7 + 3] * cols;
+          const y1 = detections.data32F[i * 7 + 4] * rows;
+          const x2 = detections.data32F[i * 7 + 5] * cols;
+          const y2 = detections.data32F[i * 7 + 6] * rows;
+          cv.rectangle(mat, new cv.Point(x1, y1), new cv.Point(x2, y2), [0, 255, 0, 255], 2);
+        }
       }
-    });
+
+      cv.imshow("canvasOutput", mat);
+      mat.delete();
+      blob.delete();
+      detections.delete();
+    }
   </script>
 </body>
 </html>
