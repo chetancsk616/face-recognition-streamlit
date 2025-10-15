@@ -2,108 +2,163 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>💡 Smart Light Detection</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline Face Detection Demo</title>
+
   <style>
-    body { font-family: Arial, sans-serif; text-align: center;
-           background:#0e0e0e; color:#f1f1f1; margin:0; }
-    h1 { color:#00e6e6; margin-top:20px; }
-    #uploadInput,#detectButton{
-      margin:15px; padding:10px 20px; border:none; border-radius:8px;
-      font-size:1rem; cursor:pointer; transition:0.3s;
+    body {
+      font-family: Arial, sans-serif;
+      background: #101820;
+      color: #fff;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
     }
-    #uploadInput{ background:#00e6e6; color:#111; }
-    #detectButton{ background:#0077ff; color:#fff; }
-    #detectButton:hover{ background:#005ccc; }
-    #preview{ margin-top:20px; max-width:90%; border-radius:8px;
-              box-shadow:0 0 10px rgba(0,0,0,0.4);}
-    #container{ position:relative; display:inline-block; margin-top:20px; }
-    canvas{ position:absolute; left:0; top:0; }
-    #status{ margin-top:20px; font-size:1.5rem; font-weight:bold; }
+
+    h1 {
+      margin-top: 10px;
+      color: #00bfff;
+    }
+
+    .container {
+      margin-top: 30px;
+    }
+
+    #imageUpload {
+      margin: 20px 0;
+      padding: 10px;
+      border: 2px solid #00bfff;
+      border-radius: 8px;
+      background: #14243a;
+      color: #fff;
+    }
+
+    #detectBtn {
+      padding: 10px 20px;
+      background: #00bfff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    #detectBtn:hover {
+      background: #0096c7;
+    }
+
+    #canvasContainer {
+      position: relative;
+      display: inline-block;
+      margin-top: 20px;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #status {
+      margin-top: 20px;
+      color: #aaa;
+    }
   </style>
 </head>
 <body>
-  <h1>💡 Smart Light Detection</h1>
+  <h1>Offline Face Detection</h1>
+  <p>Upload a photo, then click “Detect Faces”. Works fully offline.</p>
 
-  <input type="file" id="uploadInput" accept="image/*">
-  <button id="detectButton">🔍 Detect Faces</button>
+  <div class="container">
+    <input type="file" id="imageUpload" accept="image/*" />
+    <br />
+    <button id="detectBtn">Detect Faces</button>
+  </div>
 
-  <div id="container">
-    <img id="preview" />
+  <div id="canvasContainer">
+    <img id="inputImage" style="max-width: 90%; display: none;" />
     <canvas id="overlay"></canvas>
   </div>
 
-  <h2 id="status">🌑 Light OFF</h2>
+  <p id="status">Loading model, please wait...</p>
 
-  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+  <!-- Offline face-api.js -->
+  <script src="./face-api.min.js"></script>
+
   <script>
-    const uploadInput=document.getElementById('uploadInput');
-    const detectButton=document.getElementById('detectButton');
-    const preview=document.getElementById('preview');
-    const overlay=document.getElementById('overlay');
-    const statusText=document.getElementById('status');
-    const ctx=overlay.getContext('2d');
-    let imageLoaded=false, modelsLoaded=false;
+    const imageUpload = document.getElementById('imageUpload');
+    const detectBtn = document.getElementById('detectBtn');
+    const inputImage = document.getElementById('inputImage');
+    const overlay = document.getElementById('overlay');
+    const statusText = document.getElementById('status');
 
-    async function initModels(){
-      const MODEL_URL='./models/';
-      try{
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        modelsLoaded=true;
-        statusText.textContent='✅ Model loaded. Ready for detection.';
-        statusText.style.color='#00ff00';
-        console.log("✅ Model loaded!");
-      }catch(err){
-        console.error("❌ Model failed:",err);
-        statusText.textContent='❌ Failed to load model.';
-        statusText.style.color='#ff4444';
+    let modelLoaded = false;
+
+    // Load model from local folder
+    async function loadModels() {
+      try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+        modelLoaded = true;
+        statusText.innerText = '✅ Model loaded. Upload an image to begin.';
+      } catch (error) {
+        console.error(error);
+        statusText.innerText = '❌ Failed to load model. Check your folder paths.';
       }
     }
 
-    function loadImage(file){
-      return new Promise(resolve=>{
-        const reader=new FileReader();
-        reader.onload=e=>{
-          const img=new Image();
-          img.src=e.target.result;
-          img.onload=()=>resolve(img);
+    loadModels();
+
+    // Display uploaded image
+    imageUpload.addEventListener('change', () => {
+      const file = imageUpload.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        inputImage.src = reader.result;
+        inputImage.onload = () => {
+          statusText.innerText = "Image loaded. Click 'Detect Faces'.";
+          overlay.width = inputImage.width;
+          overlay.height = inputImage.height;
+          inputImage.style.display = 'block';
         };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    uploadInput.addEventListener('change',async e=>{
-      const file=e.target.files[0];
-      if(!file) return;
-      const image=await loadImage(file);
-      preview.src=image.src;
-      imageLoaded=true;
-      statusText.textContent="🖼️ Image loaded. Click 'Detect Faces'";
-      statusText.style.color="#00e6e6";
+      };
+      reader.readAsDataURL(file);
     });
 
-    detectButton.addEventListener('click',async()=>{
-      if(!modelsLoaded){ alert("Model not loaded yet."); return; }
-      if(!imageLoaded){ alert("Please upload an image."); return; }
+    // Detect faces when button clicked
+    detectBtn.addEventListener('click', async () => {
+      if (!modelLoaded) {
+        statusText.innerText = 'Please wait - model still loading...';
+        return;
+      }
+      if (!inputImage.src) {
+        statusText.innerText = 'Please upload an image first.';
+        return;
+      }
 
-      overlay.width=preview.width;
-      overlay.height=preview.height;
-      ctx.clearRect(0,0,overlay.width,overlay.height);
+      statusText.innerText = 'Detecting faces...';
 
-      const detections=await faceapi.detectAllFaces(preview,
-        new faceapi.TinyFaceDetectorOptions());
+      const detections = await faceapi.detectAllFaces(
+        inputImage,
+        new faceapi.TinyFaceDetectorOptions()
+      );
 
-      if(detections.length>0){
-        faceapi.draw.drawDetections(overlay,detections);
-        statusText.textContent=`💡 Light ON — ${detections.length} face(s) detected`;
-        statusText.style.color="#00ff00";
-      }else{
-        statusText.textContent="🌑 Light OFF — No face detected";
-        statusText.style.color="#ff4444";
+      const ctx = overlay.getContext('2d');
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#00FF00';
+
+      detections.forEach((detection) => {
+        const box = detection.box;
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
+      });
+
+      if (detections.length > 0) {
+        statusText.innerText = `✅ Detected ${detections.length} face(s).`;
+      } else {
+        statusText.innerText = '😕 No faces detected.';
       }
     });
-
-    initModels();
   </script>
 </body>
 </html>
