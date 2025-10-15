@@ -3,103 +3,57 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>💡 Smart Light Face Detection</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background-color: #111;
-      color: #eee;
-      margin: 0;
-      padding: 0;
-    }
-    h1 {
-      margin-top: 20px;
-      color: #00e6e6;
-    }
-    video, canvas {
-      border-radius: 12px;
-      margin-top: 20px;
-      box-shadow: 0 0 15px rgba(0,0,0,0.5);
-    }
-    #status {
-      margin-top: 15px;
-      font-size: 1.5rem;
-      font-weight: bold;
-    }
-    #startBtn {
-      padding: 10px 25px;
-      margin-top: 25px;
-      font-size: 1.1rem;
-      background-color: #00e6e6;
-      color: #111;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-    #startBtn:hover {
-      background-color: #00b3b3;
-    }
-  </style>
+  <title>Smart Light Face Detection</title>
 </head>
-
 <body>
   <h1>💡 Smart Light Face Detection</h1>
-
-  <!-- Start Button -->
   <button id="startBtn">Start Camera</button>
-
-  <!-- Video Feed -->
-  <div>
-    <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
-    <canvas id="overlay" width="640" height="480"></canvas>
-  </div>
-
-  <!-- Status Text -->
+  <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
+  <canvas id="overlay" width="640" height="480"></canvas>
   <h2 id="status">🌑 Light OFF</h2>
 
-  <!-- Load face-api.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
-
   <script>
     const startBtn = document.getElementById('startBtn');
     const video = document.getElementById('video');
     const overlay = document.getElementById('overlay');
     const ctx = overlay.getContext('2d');
     const statusText = document.getElementById('status');
-
     let lightOn = false;
     let lastFaceTime = Date.now();
 
-    // Start the webcam feed
     async function startVideo() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',  // ensures front camera on phones
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          },
+          audio: false
+        });
+
         video.srcObject = stream;
         video.style.display = "block";
         startBtn.style.display = "none";
       } catch (err) {
-        alert("⚠️ Camera access denied or unavailable.\nPlease allow camera access in browser settings.");
+        console.error("Camera error:", err);
+        alert("⚠️ Camera access failed: " + err.message);
       }
     }
 
-    // Initialize face-api model and button listener
     async function init() {
       await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
       startBtn.addEventListener('click', startVideo);
     }
 
-    // When video starts playing
     video.addEventListener('play', () => {
-      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 256, scoreThreshold: 0.5 });
-
+      const options = new faceapi.TinyFaceDetectorOptions();
       setInterval(async () => {
         const detections = await faceapi.detectAllFaces(video, options);
         ctx.clearRect(0, 0, overlay.width, overlay.height);
         faceapi.draw.drawDetections(overlay, detections);
 
-        // Light logic
         if (detections.length > 0) {
           lightOn = true;
           lastFaceTime = Date.now();
@@ -107,13 +61,11 @@
           lightOn = false;
         }
 
-        // Update UI
         statusText.textContent = lightOn ? "💡 Light ON" : "🌑 Light OFF";
-        statusText.style.color = lightOn ? "#00ff00" : "#ff4444";
+        statusText.style.color = lightOn ? "#0f0" : "#f44";
       }, 200);
     });
 
-    // Start app
     init();
   </script>
 </body>
