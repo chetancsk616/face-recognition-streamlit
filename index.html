@@ -24,11 +24,6 @@
       margin-bottom: 10px;
       color: #333;
     }
-    #status {
-      font-size: 14px;
-      color: #666;
-      margin-bottom: 10px;
-    }
     #upload {
       margin: 15px 0;
     }
@@ -53,69 +48,94 @@
       background: #ccc;
       cursor: not-allowed;
     }
+    #log {
+      text-align: left;
+      font-family: monospace;
+      background: #111;
+      color: #0f0;
+      padding: 10px;
+      margin-top: 15px;
+      border-radius: 8px;
+      max-height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Offline Face Detection (OpenCV.js DNN)</h1>
-    <p id="status">🕓 Loading OpenCV.js, please wait...</p>
+    <p>Upload an image and detect faces using OpenCV.js — fully offline.</p>
 
     <input type="file" id="upload" accept="image/*" disabled />
     <button id="detectBtn" class="btn" disabled>🔍 Detect Faces</button>
     <canvas id="canvasOutput"></canvas>
+
+    <div id="log">[Log Output]</div>
   </div>
 
   <script async src="opencv.js" onload="onOpenCvReady();"></script>
   <script>
     let net, imgElement, mat;
-    const statusEl = document.getElementById('status');
     const upload = document.getElementById('upload');
     const detectBtn = document.getElementById('detectBtn');
-    const canvas = document.getElementById('canvasOutput');
+    const logDiv = document.getElementById('log');
+
+    function log(msg) {
+      logDiv.textContent += "\n" + msg;
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(msg);
+    }
 
     async function onOpenCvReady() {
-      statusEl.textContent = "✅ OpenCV.js loaded. Loading face model...";
+      log("✅ OpenCV.js loaded.");
       try {
-        // Load the Caffe model files
+        log("📦 Loading face detection model files...");
         const prototxt = await fetch('deploy.prototxt').then(r => r.arrayBuffer());
         const model = await fetch('res10_300x300_ssd_iter_140000.caffemodel').then(r => r.arrayBuffer());
         net = cv.readNetFromCaffe(new Uint8Array(prototxt), new Uint8Array(model));
-        statusEl.textContent = "✅ Model loaded successfully! Upload an image.";
+        log("✅ Model successfully loaded!");
         upload.disabled = false;
+        log("📂 Ready for image upload.");
       } catch (err) {
         console.error(err);
-        statusEl.textContent = "❌ Failed to load model. Check files.";
+        log("❌ Error: Model failed to load. Check local files.");
       }
     }
 
     upload.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      log(`📸 Selected file: ${file.name}`);
       const reader = new FileReader();
       reader.onload = function() {
         const img = new Image();
         img.onload = function() {
           imgElement = img;
-          const ctx = canvas.getContext('2d');
-          canvas.width = img.width;
-          canvas.height = img.height;
+          const ctx = canvasOutput.getContext('2d');
+          canvasOutput.width = img.width;
+          canvasOutput.height = img.height;
           ctx.drawImage(img, 0, 0);
           detectBtn.disabled = false;
-          statusEl.textContent = "📸 Image ready. Click 'Detect Faces'.";
-        }
+          log("✅ Image loaded into canvas. Ready to detect.");
+        };
         img.src = reader.result;
-      }
+      };
       reader.readAsDataURL(file);
     });
 
     detectBtn.onclick = () => {
-      if (!imgElement || !net) return alert("Model or image not ready!");
+      if (!imgElement || !net) {
+        log("⚠️ Model or image not ready.");
+        return;
+      }
       detectBtn.disabled = true;
-      statusEl.textContent = "🔎 Detecting faces... please wait.";
+      log("🔍 Running face detection...");
 
-      // Run DNN detection
       mat = cv.imread(imgElement);
-      const blob = cv.blobFromImage(mat, 1.0, new cv.Size(300, 300), new cv.Scalar(104, 177, 123));
+      const blob = cv.blobFromImage(mat, 1.0, new cv.Size(300, 300),
+                  new cv.Scalar(104, 177, 123));
       net.setInput(blob);
       const detections = net.forward();
 
@@ -141,9 +161,9 @@
       detectBtn.disabled = false;
 
       if (faceCount > 0) {
-        statusEl.textContent = `✅ Detected ${faceCount} face(s).`;
+        log(`✅ Detection complete — ${faceCount} face(s) found.`);
       } else {
-        statusEl.textContent = "❌ No faces detected.";
+        log("❌ No faces detected in this image.");
       }
     };
   </script>
