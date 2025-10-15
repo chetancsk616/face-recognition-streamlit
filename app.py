@@ -1,73 +1,39 @@
-import streamlit as st
 import cv2
-import numpy as np
-from ultralytics import YOLO
-import torch
-import streamlit.components.v1 as components
+import streamlit as st
 
-st.set_page_config(page_title="Face Detection", layout="centered")
+# Set page title
+st.title("Real-Time Face Detection with OpenCV")
 
-# ✅ Fix for PyTorch 2.6 "weights_only" issue
-if hasattr(torch, "serialization"):
-    try:
-        from ultralytics.nn.tasks import DetectionModel
-        torch.serialization.add_safe_globals([DetectionModel])
-    except Exception as e:
-        st.warning(f"Safe global registration skipped: {e}")
+# Load the pre-trained Haar Cascade model
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-# Load YOLO model safely
-@st.cache_resource
-def load_model():
-    try:
-        return YOLO("yolov8n-face.pt")
-    except Exception as e:
-        st.error("⚠️ Error loading YOLO model. Check that yolov8n-face.pt exists.")
-        st.stop()
+# Start webcam (Streamlit handles video via image update)
+run = st.checkbox('Start Camera')
 
-model = load_model()
+FRAME_WINDOW = st.image([])
 
-st.title("😎 Real-Time Face Detection (No Pillow Version)")
-st.markdown("This app detects faces from your **laptop camera** or an **uploaded image** using YOLOv8.")
+camera = cv2.VideoCapture(0)
 
-# Sidebar for mode selection
-mode = st.sidebar.radio("Select Mode", ["Webcam Feed", "Upload Image"])
+while run:
+    ret, frame = camera.read()
+    if not ret:
+        st.warning("Failed to access camera.")
+        break
 
-# Webcam mode
-if mode == "Webcam Feed":
-    st.subheader("📸 Live Webcam Feed")
-    html_code = """
-    <video id="video" autoplay playsinline style="width:100%;max-width:640px;border-radius:12px;border:2px solid #ccc;"></video>
-    <p id="status" style="font-family:Arial;margin-top:10px;color:green;">Initializing camera...</p>
-    <script>
-      const video = document.getElementById('video');
-      const status = document.getElementById('status');
-      async function initCamera() {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          video.srcObject = stream;
-          status.textContent = "✅ Camera active!";
-        } catch (err) {
-          status.textContent = "❌ Unable to access camera: " + err.message;
-        }
-      }
-      initCamera();
-    </script>
-    """
-    components.html(html_code, height=600)
+    # Convert to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-# Upload image mode
-elif mode == "Upload Image":
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        # Read image bytes directly
-        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-        img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+    # Detect faces
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-        # Run YOLO detection
-        results = model(img)
-        annotated_frame = results[0].plot()
+    # Draw rectangles
+    for (x, y, w, h) in faces:
+        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-        # Display results
-        st.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB),
-                 caption="Detected Faces",
-                 use_column_width=True)
+    # Convert color for Streamlit display
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    FRAME_WINDOW.image(frame)
+
+else:
+    camera.release()
+    st.write("Stopped")
